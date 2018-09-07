@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -30,19 +30,13 @@ import com.pinterest.secor.parser.MessageParser;
 import com.pinterest.secor.parser.TimestampedMessageParser;
 import com.pinterest.secor.util.ReflectionUtil;
 import com.timgroup.statsd.NonBlockingStatsDClient;
-
 import net.minidev.json.JSONArray;
 import net.minidev.json.JSONObject;
 import net.minidev.json.JSONValue;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.List;
@@ -66,8 +60,7 @@ public class ProgressMonitor {
     private NonBlockingStatsDClient mStatsDClient;
 
     public ProgressMonitor(SecorConfig config)
-            throws Exception
-    {
+            throws Exception {
         mConfig = config;
         mZookeeperConnector = new ZookeeperConnector(mConfig);
         mKafkaClient = new KafkaClient(mConfig);
@@ -98,14 +91,14 @@ public class ProgressMonitor {
                 connection.setRequestProperty("Content-Length",
                         Integer.toString(body.getBytes().length));
             }
-            connection.setUseCaches (false);
+            connection.setUseCaches(false);
             connection.setDoInput(true);
             connection.setDoOutput(true);
 
             if (body != null) {
                 // Send request.
                 DataOutputStream dataOutputStream = new DataOutputStream(
-                    connection.getOutputStream());
+                        connection.getOutputStream());
                 dataOutputStream.writeBytes(body);
                 dataOutputStream.flush();
                 dataOutputStream.close();
@@ -117,7 +110,7 @@ public class ProgressMonitor {
             Map response = (Map) JSONValue.parse(reader);
             if (!response.get("failed").equals(0)) {
                 throw new RuntimeException("url " + url + " with body " + body + " failed " +
-                    JSONObject.toJSONString(response));
+                        JSONObject.toJSONString(response));
             }
         } catch (IOException exception) {
             if (connection != null) {
@@ -158,20 +151,15 @@ public class ProgressMonitor {
         for (Stat stat : stats) {
             @SuppressWarnings("unchecked")
             Map<String, String> tags = (Map<String, String>) stat.get(Stat.STAT_KEYS.TAGS.getName());
-            StringBuilder builder = new StringBuilder();
-	    if (mConfig.getStatsDPrefixWithConsumerGroup()) {
-		builder.append(tags.get(Stat.STAT_KEYS.GROUP.getName()))
-		    .append(PERIOD);
-	    }
-	    String aspect = builder
-		.append((String)stat.get(Stat.STAT_KEYS.METRIC.getName()))
-		.append(PERIOD)
-		.append(tags.get(Stat.STAT_KEYS.TOPIC.getName()))
-		.append(PERIOD)
-		.append(tags.get(Stat.STAT_KEYS.PARTITION.getName()))
-		.toString();
-            long value = Long.parseLong((String)stat.get(Stat.STAT_KEYS.VALUE.getName()));
-            mStatsDClient.recordGaugeValue(aspect, value);
+
+            String aspect = String.format("secor.%s", stat.get(Stat.STAT_KEYS.METRIC.getName()));
+            long value = Long.parseLong((String) stat.get(Stat.STAT_KEYS.VALUE.getName()));
+
+            mStatsDClient.recordGaugeValue(aspect, value,
+                    String.format("topic:%s", tags.get(Stat.STAT_KEYS.TOPIC.getName())),
+                    String.format("partition:%s", tags.get(Stat.STAT_KEYS.PARTITION.getName())),
+                    String.format("group:%s", tags.get(Stat.STAT_KEYS.GROUP.getName())));
+
         }
     }
 
@@ -189,7 +177,7 @@ public class ProgressMonitor {
             for (Integer partition : partitions) {
                 TopicPartition topicPartition = new TopicPartition(topic, partition);
                 Message committedMessage = mKafkaClient.getCommittedMessage(topicPartition);
-                long committedOffset = - 1;
+                long committedOffset = -1;
                 long committedTimestampMillis = -1;
                 if (committedMessage == null) {
                     LOG.warn("no committed message found in topic {} partition {}", topic, partition);
@@ -205,8 +193,8 @@ public class ProgressMonitor {
                 } else {
                     long lastOffset = lastMessage.getOffset();
                     long lastTimestampMillis = getTimestamp(lastMessage);
-                    assert committedOffset <= lastOffset: Long.toString(committedOffset) + " <= " +
-                        lastOffset;
+                    assert committedOffset <= lastOffset : Long.toString(committedOffset) + " <= " +
+                            lastOffset;
 
                     long offsetLag = lastOffset - committedOffset;
                     long timestampMillisLag = lastTimestampMillis - committedTimestampMillis;
@@ -236,16 +224,14 @@ public class ProgressMonitor {
 
     private long getTimestamp(Message message) throws Exception {
         if (mMessageParser instanceof TimestampedMessageParser) {
-            return ((TimestampedMessageParser)mMessageParser).getTimestampMillis(message);
+            return ((TimestampedMessageParser) mMessageParser).getTimestampMillis(message);
         } else {
             return -1;
         }
     }
 
     /**
-     *
      * JSON hash map extension to store statistics
-     *
      */
     private static class Stat extends JSONObject {
 
